@@ -112,6 +112,23 @@
         .score-value.x-val { color: #ff4a5a; }
         .score-value.o-val { color: #00e6c3; }
 
+        /* Placar Dinâmico Online */
+        .live-match-scores {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            background: #202024;
+            border: 1px solid #29292e;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .live-player-x { color: #ff4a5a; font-weight: bold; }
+        .live-player-o { color: #00e6c3; font-weight: bold; }
+        .live-score-vs { color: #a8a8b3; font-family: monospace; font-weight: bold; }
+
         /* Controles Base e Online */
         .online-controls {
             display: flex;
@@ -411,6 +428,12 @@
     </div>
 
     <div class="screen hidden" id="gameScreen">
+        <div class="live-match-scores">
+            <span class="live-player-x" id="livePlayerXLabel">Jogador X: 0</span>
+            <span class="live-score-vs">VS</span>
+            <span class="live-player-o" id="livePlayerOLabel">Jogador O: 0</span>
+        </div>
+
         <div class="game-meta">
             <div class="status" id="status">Aguardando jogador...</div>
             <div class="timer" id="timer">00:00:00</div>
@@ -505,6 +528,8 @@
         const historyList = document.getElementById('historyList');
         const noHistoryMsg = document.getElementById('noHistoryMsg');
         const nicknameInput = document.getElementById('nicknameInput');
+        const livePlayerXLabel = document.getElementById('livePlayerXLabel');
+        const livePlayerOLabel = document.getElementById('livePlayerOLabel');
 
         // Controles
         const startBtn = document.getElementById('startBtn');
@@ -548,6 +573,8 @@
         let startTime = 0;
         let timerInterval = null;
 
+        let onlineMatchScoreX = 0;
+        let onlineMatchScoreO = 0;
         let playerXName = "Jogador Local X";
         let playerOName = "Jogador Local O";
 
@@ -634,6 +661,16 @@
             return timerText.innerText;
         }
 
+        function updateLiveScoreLabels() {
+            if (gameMode === 'local') {
+                livePlayerXLabel.innerText = `X: ${scores.X}`;
+                livePlayerOLabel.innerText = `O: ${scores.O}`;
+            } else {
+                livePlayerXLabel.innerText = `👑 ${playerXName}: ${onlineMatchScoreX}`;
+                livePlayerOLabel.innerText = `${playerOName}: ${onlineMatchScoreO}`;
+            }
+        }
+
         function startGame(mode = 'local') {
             gameMode = mode;
             gameState = ["", "", "", "", "", "", "", "", ""];
@@ -643,16 +680,32 @@
             
             cells.forEach(cell => { cell.innerText = ""; cell.className = "cell"; });
 
+            if (gameMode === 'online') {
+                if (onlinePlayerSymbol === 'O') {
+                    recommenceBtn.classList.add('hidden');
+                } else {
+                    recommenceBtn.classList.remove('hidden');
+                    recommenceBtn.disabled = true; // Permanece bloqueado se estiver sozinho
+                }
+            } else {
+                recommenceBtn.classList.remove('hidden');
+                recommenceBtn.disabled = false;
+            }
+
             if(gameMode === 'local') {
                 playerXName = getNickname();
                 playerOName = "Local_O";
                 board.classList.remove('waiting-players');
                 isGameActive = true;
                 statusText.innerText = `Vez do jogador X`;
+                updateLiveScoreLabels();
                 startTimerSync();
             } else {
                 isGameActive = false;
                 statusText.innerText = `Aguardando oponente entrar...`;
+                onlineMatchScoreX = 0;
+                onlineMatchScoreO = 0;
+                updateLiveScoreLabels();
             }
             showScreen(gameScreen);
         }
@@ -703,6 +756,10 @@
                 
                 if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
 
+                if (lastPlayerWhoMoved === 'X') onlineMatchScoreX++;
+                else onlineMatchScoreO++;
+                updateLiveScoreLabels();
+
                 if (lastPlayerWhoMoved === onlinePlayerSymbol) {
                     scores[onlinePlayerSymbol]++;
                     saveHistory(`Vitória ${onlinePlayerSymbol}`, duration, [...remoteBoard]);
@@ -724,7 +781,6 @@
                 
                 if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
 
-                scores.draws++;
                 saveHistory("Empate", duration, [...remoteBoard]);
                 updateMenuDOM();
                 return true;
@@ -756,6 +812,7 @@
                 scores[currentPlayer]++;
                 saveHistory(`Vitória ${currentPlayer}`, duration, [...gameState]);
                 updateMenuDOM();
+                updateLiveScoreLabels();
                 vibrateDevice();
                 triggerConfetti();
                 return;
@@ -766,7 +823,6 @@
                 isGameActive = false;
                 board.className = "board game-over";
                 statusText.innerText = "Empate! Deu velha! 👵";
-                scores.draws++;
                 saveHistory("Empate", duration, [...gameState]);
                 updateMenuDOM();
                 return;
@@ -797,6 +853,7 @@
         }
 
         function updateMenuDOM() {
+            if (!document.getElementById('scoreX')) return;
             document.getElementById('scoreX').innerText = scores.X;
             document.getElementById('scoreO').innerText = scores.O;
             document.getElementById('scoreDraws').innerText = scores.draws;
@@ -878,6 +935,7 @@
 
                 playerXName = data.playerX || "Desconhecido";
                 playerOName = data.playerO || "Aguardando...";
+                updateLiveScoreLabels();
 
                 if (data.abandonedBy) {
                     const quitter = data.abandonedBy;
@@ -909,6 +967,7 @@
                     board.className = "board";
                     isGameActive = true;
                     if (onlinePlayerSymbol === 'X') {
+                        recommenceBtn.disabled = false; // Habilita o botão ao detectar o oponente
                         startTimerSync();
                         db.ref('rooms/' + roomId).update({ recommenceTrigger: false });
                     } else {
@@ -996,9 +1055,6 @@
             });
         });
 
-        // ==========================================
-        // MATCHMAKING BLINDADO CONTRA CONFLITOS DE TIMESTAMP
-        // ==========================================
         matchmakeBtn.addEventListener('click', () => {
             if(!savedNickname) {
                 settingsModal.classList.remove('hidden');
@@ -1013,7 +1069,6 @@
                 matchmakeBtn.classList.add('searching');
                 setInterfaceLock(true);
 
-                // Varre salas abertas criadas manualmente primeiro
                 db.ref('rooms').orderByChild('allowMatchmake').equalTo(true).once('value', (snapshot) => {
                     if(!isSearching) return;
 
@@ -1038,7 +1093,6 @@
                             resetMatchmakeBtn();
                         });
                     } else {
-                        // Executa pareamento com timestamp limpo nativo em string segura
                         executeClassicQueue();
                     }
                 });
@@ -1046,71 +1100,73 @@
         });
 
         function executeClassicQueue() {
-            // Desliga listeners soltos na tabela antes de abrir uma nova conexão
             db.ref('queue').off();
+            const activeNick = getNickname();
 
-            queueRef = db.ref('queue').push({
-                name: getNickname(),
-                timestamp: Date.now() // Convertido para milissegundos estáticos, evitando conflito de ServerValue
-            });
+            // GERA A REFERÊNCIA DA CHAVE DO PROPRIO NICK ANTES PARA EVITAR QUEBRA DO PROTOCOLO HTTPS/WSS
+            queueRef = db.ref('queue/' + activeNick);
+            
+            // EXECUTA A GRAVAÇÃO SEM RETORNO CORRUPTO DE PROMISE BLOQUEADA
+            queueRef.set({
+                name: activeNick,
+                timestamp: Date.now()
+            }).then(() => {
+                queueRef.onDisconnect().remove();
 
-            queueRef.onDisconnect().remove();
+                db.ref('queue').limitToFirst(2).on('value', (snapshot) => {
+                    if (!isSearching) return;
+                    const players = snapshot.val();
+                    if (!players) return;
 
-            // Roda a escuta isolada por limitação rígida de 2 registros
-            db.ref('queue').limitToFirst(2).on('value', (snapshot) => {
-                if (!isSearching) return;
-                const players = snapshot.val();
-                if (!players) return;
-
-                const keys = Object.keys(players);
-                if (keys.length >= 2) {
-                    const targetRoomId = "MATCH_" + keys[0]; 
-                    
-                    if (keys[0] === queueRef.key) {
-                        // Eu sou o Player 1 da Fila
-                        db.ref('rooms/' + targetRoomId).set({
-                            gameState: ["", "", "", "", "", "", "", "", ""],
-                            currentPlayer: 'X',
-                            playerX: players[keys[0]].name,
-                            playerO: players[keys[1]].name,
-                            allowMatchmake: false,
-                            abandonedBy: null,
-                            syncTime: "00:00:00",
-                            recommenceTrigger: false
-                        }).then(() => {
-                            if(queueRef) queueRef.onDisconnect().cancel();
-                            db.ref('queue').off(); // Desliga a escuta global da fila imediatamente após o match
-                            db.ref('queue').child(keys[0]).remove();
-                            db.ref('queue').child(keys[1]).remove();
-                            
-                            initOnlineRoom(targetRoomId, 'X');
-                            startGame('online');
-                            resetMatchmakeBtn();
-                        });
-                    } else if (keys[1] === queueRef.key) {
-                        // Eu sou o Player 2 da Fila
-                        setTimeout(() => {
-                            if(!isSearching) return;
-                            if(queueRef) queueRef.onDisconnect().cancel();
-                            db.ref('queue').off(); 
-                            
-                            initOnlineRoom(targetRoomId, 'O');
-                            startGame('online');
-                            resetMatchmakeBtn();
-                        }, 1200); 
+                    const keys = Object.keys(players);
+                    if (keys.length >= 2) {
+                        const targetRoomId = "MATCH_" + keys[0]; 
+                        
+                        if (keys[0] === activeNick) {
+                            db.ref('rooms/' + targetRoomId).set({
+                                gameState: ["", "", "", "", "", "", "", "", ""],
+                                currentPlayer: 'X',
+                                playerX: players[keys[0]].name,
+                                playerO: players[keys[1]].name,
+                                allowMatchmake: false,
+                                abandonedBy: null,
+                                syncTime: "00:00:00",
+                                recommenceTrigger: false
+                            }).then(() => {
+                                if(queueRef) queueRef.onDisconnect().cancel();
+                                db.ref('queue').off(); 
+                                db.ref('queue').child(keys[0]).remove();
+                                db.ref('queue').child(keys[1]).remove();
+                                
+                                initOnlineRoom(targetRoomId, 'X');
+                                startGame('online');
+                                resetMatchmakeBtn();
+                            });
+                        } else if (keys[1] === activeNick) {
+                            setTimeout(() => {
+                                if(!isSearching) return;
+                                if(queueRef) queueRef.onDisconnect().cancel();
+                                db.ref('queue').off(); 
+                                
+                                initOnlineRoom(targetRoomId, 'O');
+                                startGame('online');
+                                resetMatchmakeBtn();
+                            }, 1200); 
+                        }
                     }
-                }
+                });
+            }).catch((error) => {
+                console.error("Firebase Queue Blocked Error:", error);
+                cancelQueue();
             });
         }
 
         function cancelQueue() {
             isSearching = false;
-            db.ref('queue').off(); // Força o desligamento de qualquer leitura travada
-            if (queueRef) {
-                queueRef.onDisconnect().cancel();
-                queueRef.remove();
-                queueRef = null;
-            }
+            db.ref('queue').off(); 
+            const activeNick = getNickname();
+            db.ref('queue/' + activeNick).onDisconnect().cancel();
+            db.ref('queue/' + activeNick).remove();
             resetMatchmakeBtn();
         }
 
@@ -1148,9 +1204,6 @@
             showScreen(menuScreen);
         }
 
-        // ==========================================
-        // CONFIRMAÇÃO DE RECOMEÇO
-        // ==========================================
         recommenceBtn.addEventListener('click', () => {
             if(gameMode === 'online' && onlinePlayerSymbol !== 'X') {
                 return alert("Ação recusada: Apenas o criador da sala tem permissão para reiniciar o tabuleiro!");
@@ -1177,7 +1230,6 @@
             }
         });
 
-        // Listeners básicos de interface
         openSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         saveSettingsBtn.addEventListener('click', () => {
             const nick = nicknameInput.value.trim();
