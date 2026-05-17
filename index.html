@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Velha - Premium Dark Online</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            background-color: #121214;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #e1e1e6;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 440px;
+            padding: 20px;
+            flex-grow: 1;
+        }
+
+        .hidden { display: none !important; }
+
+        .menu-header {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            letter-spacing: 2px;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+
+        .icon-btn {
+            background: #202024;
+            border: 1px solid #29292e;
+            color: #e1e1e6;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover:not(:disabled) { border-color: #00e6c3; color: #00e6c3; }
+
+        .panel {
+            width: 100%;
+            background: #202024;
+            border: 1px solid #29292e;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            margin-bottom: 15px;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            color: #a8a8b3;
+            text-align: center;
+            border-bottom: 1px solid #29292e;
+            padding-bottom: 8px;
+        }
+
+        /* Placar Geral */
+        .scoreboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            text-align: center;
+        }
+
+        .score-box {
+            background: #121214;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #29292e;
+        }
+        .score-box.x-box { border-color: rgba(255, 74, 90, 0.3); }
+        .score-box.o-box { border-color: rgba(0, 230, 195, 0.3); }
+        .score-label { font-size: 0.8rem; color: #a8a8b3; margin-bottom: 5px; }
+        .score-value { font-size: 1.5rem; font-weight: bold; }
+        .score-value.x-val { color: #ff4a5a; }
+        .score-value.o-val { color: #00e6c3; }
+
+        /* Controles Base e Online */
+        .online-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+        .vertical-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+        input {
+            width: 100%;
+            background: #121214;
+            border: 1px solid #29292e;
+            border-radius: 6px;
+            padding: 12px;
+            color: #ffffff;
+            font-size: 1rem;
+            text-align: center;
+        }
+        input:focus { border-color: #00e6c3; outline: none; }
+        input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #a8a8b3;
+            margin: 2px 0 5px 0;
+            cursor: pointer;
+        }
+        .checkbox-group input { width: 16px; height: 16px; cursor: pointer; }
+        .checkbox-group.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+        /* Histórico Tablist SAMP */
+        .samp-container {
+            width: 100%;
+            background: #121214;
+            border: 2px solid #29292e;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .samp-header {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 0.8fr;
+            background: #29292e;
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            border-bottom: 2px solid #3e3e42;
+        }
+
+        .history-list {
+            max-height: 180px;
+            overflow-y: auto;
+            list-style: none;
+            font-size: 0.85rem;
+        }
+
+        .history-item {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 0.8fr;
+            padding: 10px 12px;
+            border-bottom: 1px solid #202024;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .history-item:hover { background: #202024; }
+
+        .col-partida { color: #a8a8b3; }
+        .col-vencedor { font-weight: bold; }
+        .col-vencedor.x-win { color: #ff4a5a; }
+        .col-vencedor.o-win { color: #00e6c3; }
+        .col-vencedor.draw-win { color: #e1e1e6; }
+        .col-tempo { color: #33ffdf; font-family: monospace; text-align: right; padding-right: 5px; }
+
+        /* Meta Jogo */
+        .game-meta {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            font-size: 1.1rem;
+            font-weight: 600;
+            background: #202024;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #29292e;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            flex-grow: 1;
+            margin-right: 10px;
+            text-align: center;
+        }
+
+        .timer {
+            font-size: 1.1rem;
+            font-weight: bold;
+            background: #202024;
+            border: 1px solid #29292e;
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: #33ffdf;
+            font-family: monospace;
+            min-width: 105px;
+            text-align: center;
+        }
+
+        /* Tabuleiro */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 110px);
+            grid-template-rows: repeat(3, 110px);
+            gap: 12px;
+            background-color: #202024;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #29292e;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .cell {
+            background-color: #121214;
+            border: 1px solid #29292e;
+            border-radius: 8px;
+            font-size: 3.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .board:not(.game-over):not(.waiting-players) .cell:not(.x):not(.o):hover { background-color: #29292e; }
+        .cell.x, .cell.o, .board.game-over .cell, .board.waiting-players .cell { cursor: not-allowed; pointer-events: none; }
+        .cell.x { color: #ff4a5a; text-shadow: 0 0 12px rgba(255, 74, 90, 0.3); }
+        .cell.o { color: #00e6c3; text-shadow: 0 0 12px rgba(0, 230, 195, 0.3); }
+
+        .cell.win-x { background-color: #251618 !important; border-color: #ff4a5a !important; color: #ff7380 !important; text-shadow: 0 0 20px #ff4a5a, 0 0 30px #ff4a5a !important; transform: scale(1.05); }
+        .cell.win-o { background-color: #0e2220 !important; border-color: #00e6c3 !important; color: #33ffdf !important; text-shadow: 0 0 20px #00e6c3, 0 0 30px #00e6c3 !important; transform: scale(1.05); }
+        .board.game-over .cell:not(.win-x):not(.win-o) { opacity: 0.2; }
+        .board.waiting-players { opacity: 0.5; }
+
+        /* Modais overlay */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 10, 12, 0.75); 
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background: #202024; border: 2px solid #29292e; border-radius: 12px;
+            width: 90%; max-width: 360px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .modal-stats { display: flex; justify-content: space-around; width: 100%; margin: 15px 0; background: #121214; padding: 10px; border-radius: 8px; border: 1px solid #29292e; font-size: 0.9rem; }
+        .preview-board { display: grid; grid-template-columns: repeat(3, 45px); grid-template-rows: repeat(3, 45px); gap: 6px; background: #121214; padding: 8px; border-radius: 8px; border: 1px solid #29292e; margin-bottom: 20px; }
+        .preview-cell { background: #202024; border: 1px solid #29292e; border-radius: 4px; font-size: 1.3rem; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+        .preview-cell.x { color: #ff4a5a; }
+        .preview-cell.o { color: #00e6c3; }
+
+        /* Botões */
+        .btn {
+            width: 100%; padding: 12px; font-size: 0.95rem; font-weight: bold; color: #ffffff;
+            background-color: #29292e; border: 1px solid #3e3e42; border-radius: 8px;
+            cursor: pointer; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); transition: all 0.2s ease;
+            text-transform: uppercase; letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        .btn:hover:not(:disabled) { background-color: #3e3e42; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+        
+        .btn-primary { background-color: #00e6c3; color: #121214; border: none; }
+        .btn-primary:hover:not(:disabled) { background-color: #33ffdf; box-shadow: 0 0 15px rgba(0, 230, 195, 0.4); }
+        .btn-group { display: flex; gap: 10px; width: 100%; margin-top: 20px; }
+
+        .btn-orange {
+            background-color: #ff9f1c;
+            color: #121214;
+            border: none;
+        }
+        .btn-orange:hover:not(:disabled) {
+            background-color: #ffb03b;
+            box-shadow: 0 0 15px rgba(255, 159, 28, 0.4);
+        }
+        
+        .btn-orange.searching {
+            background-color: #1a1a1e;
+            color: #ff4a5a;
+            border: 1px solid #ff4a5a;
+            box-shadow: 0 0 10px rgba(255, 74, 90, 0.2);
+            opacity: 1 !important;
+            cursor: pointer !important;
+        }
+        .btn-orange.searching:hover { background-color: #251618; }
+
+        /* Footer */
+        .site-footer {
+            width: 100%;
+            text-align: center;
+            padding: 15px 0;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+            color: #7c7c8a;
+            border-top: 1px solid rgba(41, 41, 46, 0.4);
+            background-color: #121214;
+        }
+
+        .history-list::-webkit-scrollbar { width: 6px; }
+        .history-list::-webkit-scrollbar-track { background: #121214; }
+        .history-list::-webkit-scrollbar-thumb { background: #29292e; border-radius: 4px; }
+        .confetti { position: absolute; width: 8px; height: 8px; top: -10px; border-radius: 50%; animation: fall linear forwards; pointer-events: none; z-index: 999; }
+        @keyframes fall { to { transform: translateY(105vh) rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="screen" id="menuScreen">
+        <div class="menu-header">
+            <h1>JOGO DA VELHA</h1>
+            <button class="icon-btn" id="openSettingsBtn" title="Configurar Perfil">⚙️</button>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Partida Rápida</div>
+            <button class="btn btn-orange" id="matchmakeBtn">Buscar Partida</button>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Salas Personalizadas</div>
+            <div class="online-controls">
+                <div class="input-group">
+                    <input type="password" id="createPasswordInput" placeholder="Senha da Sala (Opcional)">
+                    <button class="btn" id="createRoomBtn" style="background: #29292e; width: auto; flex-shrink: 0;">Criar Sala</button>
+                </div>
+                <label class="checkbox-group" id="allowMatchmakeCheckLabel">
+                    <input type="checkbox" id="allowMatchmakeCheck" checked>
+                    Permitir que achem essa sala buscando partida
+                </label>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 25px;">
+            <div class="panel-title">Placar Local</div>
+            <div class="scoreboard">
+                <div class="score-box x-box"><div class="score-label">X</div><div class="score-value x-val" id="scoreX">0</div></div>
+                <div class="score-box"><div class="score-label">Velhas</div><div class="score-value" id="scoreDraws">0</div></div>
+                <div class="score-box o-box"><div class="score-label">O</div><div class="score-value o-val" id="scoreO">0</div></div>
+            </div>
+        </div>
+
+        <button class="btn" id="openHistoryBtn" style="border-color: #7c7c8a; color: #a8a8b3; margin-bottom: 12px;">Ver Histórico</button>
+        <button class="btn" id="openConnectModalBtn" style="border-color: #a8a8b3; color: #a8a8b3; margin-bottom: 12px;">Conectar em uma Sala</button>
+        <button class="btn" id="startBtn" style="border-color: #00e6c3; color: #00e6c3;">Jogar Local (Mesma Tela)</button>
+    </div>
+
+    <div class="modal-overlay hidden" id="connectModal">
+        <div class="modal-content" id="connectModalContent">
+            <div class="panel-title">Buscar Sala Existente</div>
+            <div class="vertical-inputs" style="margin-bottom: 15px;">
+                <input type="text" id="roomCodeInput" placeholder="Nome do Dono da Sala">
+                <input type="password" id="roomPasswordInput" placeholder="Senha da Sala (se houver)">
+                <button class="btn btn-primary" id="joinRoomBtn">Entrar na Sala</button>
+            </div>
+            <button class="btn" id="closeConnectModalBtn" style="background: #29292e;">Voltar</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="historyModal">
+        <div class="modal-content" id="historyModalContent" style="max-width: 400px;">
+            <div class="panel-title">Histórico de Partidas</div>
+            <div class="samp-container">
+                <div class="samp-header"><span>Tipo/Partida</span><span>Vencedor</span><span>Tempo</span></div>
+                <ul class="history-list" id="historyList"><li style="padding: 15px; text-align: center; color: #a8a8b3;" id="noHistoryMsg">Nenhum registro para o perfil atual.</li></ul>
+            </div>
+            <button class="btn" id="closeHistoryModalBtn" style="background: #29292e;">Fechar</button>
+        </div>
+    </div>
+
+    <div class="screen hidden" id="gameScreen">
+        <div class="game-meta">
+            <div class="status" id="status">Aguardando jogador...</div>
+            <div class="timer" id="timer">00:00:00</div>
+        </div>
+
+        <div class="board waiting-players" id="board">
+            <button class="cell" data-cell-index="0"></button><button class="cell" data-cell-index="1"></button><button class="cell" data-cell-index="2"></button>
+            <button class="cell" data-cell-index="3"></button><button class="cell" data-cell-index="4"></button><button class="cell" data-cell-index="5"></button>
+            <button class="cell" data-cell-index="6"></button><button class="cell" data-cell-index="7"></button><button class="cell" data-cell-index="8"></button>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn" id="recommenceBtn">Recomeçar</button>
+            <button class="btn" id="menuBtn">Sair</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="confirmResetModal">
+        <div class="modal-content" id="confirmResetModalContent">
+            <div class="panel-title" style="color: #ff9f1c; border-color: rgba(255,159,28,0.2);">Confirmar Ação</div>
+            <div style="font-size: 0.95rem; margin-bottom: 20px; color: #e1e1e6; text-align: center; line-height: 1.4;">
+                Deseja recomeçar a partida?<br>O tabuleiro atual será inteiramente limpo.
+            </div>
+            <div class="btn-group" style="margin-top: 0; width: 100%;">
+                <button class="btn btn-primary" id="confirmResetBtn">Sim, Limpar</button>
+                <button class="btn" id="cancelResetBtn" style="background: #29292e;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="settingsModal">
+        <div class="modal-content" id="settingsModalContent">
+            <div class="panel-title">Configurar Perfil</div>
+            <div style="font-size: 0.9rem; margin-bottom: 12px; color: #a8a8b3; text-align: center;">
+                Apenas letras e números são permitidos (Sem espaços ou símbolos).
+            </div>
+            <input type="text" id="nicknameInput" placeholder="SeuNick123" maxlength="12" style="width: 100%; margin-bottom: 15px;">
+            <button class="btn btn-primary" id="saveSettingsBtn">Salvar Perfil</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="modalOverlay">
+        <div class="modal-content">
+            <div class="panel-title" id="modalTitle">Partida</div>
+            <div style="font-size: 0.9rem; margin-bottom: 5px;">Vencedor: <span id="modalWinner" style="font-weight:bold;"></span></div>
+            <div style="font-size: 0.9rem; color: #a8a8b3; margin-bottom: 10px;">Tempo: <span id="modalTime" style="color:#33ffdf; font-family: monospace;"></span></div>
+            <div class="modal-stats">
+                <div>Movimentos X: <strong id="movesX" style="color:#ff4a5a">0</strong></div>
+                <div>Movimentos O: <strong id="movesO" style="color:#00e6c3">0</strong></div>
+            </div>
+            <div class="preview-board" id="previewBoard"></div>
+            <button class="btn" id="closeModalBtn">Fechar</button>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        Created by KamikZMenu &copy; 2026
+    </footer>
+
+    <script>
+        // CONFIGURAÇÃO DO FIREBASE (SEU PROJETO ATIVO)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDderD_PDYjEwZ0cYzMxjfczrwJe-vfbcA",
+            authDomain: "jogo-da-velha-multijogador.firebaseapp.com",
+            databaseURL: "https://jogo-da-velha-multijogador-default-rtdb.firebaseio.com",
+            projectId: "jogo-da-velha-multijogador",
+            storageBucket: "jogo-da-velha-multijogador.firebasestorage.app",
+            messagingSenderId: "570089554017",
+            appId: "1:570089554017:web:9440d97b2e658768996a20"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Elementos DOM
+        const menuScreen = document.getElementById('menuScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const settingsModal = document.getElementById('settingsModal');
+        const settingsModalContent = document.getElementById('settingsModalContent');
+        const connectModal = document.getElementById('connectModal');
+        const connectModalContent = document.getElementById('connectModalContent');
+        const historyModal = document.getElementById('historyModal');
+        const historyModalContent = document.getElementById('historyModalContent');
+        const confirmResetModal = document.getElementById('confirmResetModal');
+        const confirmResetModalContent = document.getElementById('confirmResetModalContent');
+        
+        const board = document.getElementById('board');
+        const cells = document.querySelectorAll('[data-cell-index]');
+        const statusText = document.getElementById('status');
+        const timerText = document.getElementById('timer');
+        const historyList = document.getElementById('historyList');
+        const noHistoryMsg = document.getElementById('noHistoryMsg');
+        const nicknameInput = document.getElementById('nicknameInput');
+
+        // Controles
+        const startBtn = document.getElementById('startBtn');
+        const recommenceBtn = document.getElementById('recommenceBtn');
+        const confirmResetBtn = document.getElementById('confirmResetBtn');
+        const cancelResetBtn = document.getElementById('cancelResetBtn');
+        const menuBtn = document.getElementById('menuBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+        const matchmakeBtn = document.getElementById('matchmakeBtn');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const openConnectModalBtn = document.getElementById('openConnectModalBtn');
+        const closeConnectModalBtn = document.getElementById('closeConnectModalBtn');
+        const openHistoryBtn = document.getElementById('openHistoryBtn');
+        const closeHistoryModalBtn = document.getElementById('closeHistoryModalBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        
+        const createPasswordInput = document.getElementById('createPasswordInput');
+        const allowMatchmakeCheck = document.getElementById('allowMatchmakeCheck');
+        const allowMatchmakeCheckLabel = document.getElementById('allowMatchmakeCheckLabel');
+        const roomCodeInput = document.getElementById('roomCodeInput');
+        const roomPasswordInput = document.getElementById('roomPasswordInput');
+
+        // Estado do App
+        let scores = JSON.parse(localStorage.getItem('velha_scores')) || { X: 0, O: 0, draws: 0 };
+        let historyData = JSON.parse(localStorage.getItem('velha_history')) || [];
+        let savedNickname = localStorage.getItem('velha_nickname') || "";
+        
+        let gameMode = 'local';
+        let onlinePlayerSymbol = null;
+        let currentRoomId = null;
+        let queueRef = null;
+        let roomListenerRef = null;
+        let isSearching = false;
+        let matchmakeQueueListener = null; // Guardará o escutador ativo da fila
+        
+        let currentPlayer = 'X';
+        let gameState = ["", "", "", "", "", "", "", "", ""];
+        let isGameActive = false;
+        
+        let startTime = 0;
+        let timerInterval = null;
+
+        let playerXName = "Jogador Local X";
+        let playerOName = "Jogador Local O";
+
+        const winningConditions = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+        if(savedNickname) nicknameInput.value = savedNickname;
+
+        nicknameInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+        });
+
+        function getNickname() {
+            return savedNickname || "Jogador" + Math.floor(1000 + Math.random() * 9000);
+        }
+
+        function showScreen(screen) {
+            menuScreen.classList.add('hidden');
+            gameScreen.classList.add('hidden');
+            screen.classList.remove('hidden');
+        }
+
+        settingsModal.addEventListener('click', (e) => {
+            if (!settingsModalContent.contains(e.target)) {
+                settingsModal.classList.add('hidden');
+                nicknameInput.value = savedNickname;
+            }
+        });
+
+        connectModal.addEventListener('click', (e) => {
+            if (!connectModalContent.contains(e.target)) {
+                connectModal.classList.add('hidden');
+            }
+        });
+
+        historyModal.addEventListener('click', (e) => {
+            if (!historyModalContent.contains(e.target)) {
+                historyModal.classList.add('hidden');
+            }
+        });
+
+        confirmResetModal.addEventListener('click', (e) => {
+            if (!confirmResetModalContent.contains(e.target)) {
+                confirmResetModal.classList.add('hidden');
+            }
+        });
+
+        openConnectModalBtn.addEventListener('click', () => {
+            roomCodeInput.value = "";
+            roomPasswordInput.value = "";
+            connectModal.classList.remove('hidden');
+        });
+        closeConnectModalBtn.addEventListener('click', () => connectModal.classList.add('hidden'));
+
+        openHistoryBtn.addEventListener('click', () => historyModal.classList.remove('hidden'));
+        closeHistoryModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+
+        function formatTime(ms) {
+            let totalSeconds = Math.floor(ms / 1000);
+            let hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+            let minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+            let seconds = String(totalSeconds % 60).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function startTimerSync() {
+            clearInterval(timerInterval);
+            startTime = Date.now();
+            
+            if (gameMode === 'local' || (gameMode === 'online' && onlinePlayerSymbol === 'X')) {
+                timerInterval = setInterval(() => {
+                    const elapsed = Date.now() - startTime;
+                    const formatted = formatTime(elapsed);
+                    timerText.innerText = formatted;
+
+                    if (gameMode === 'online' && currentRoomId) {
+                        db.ref('rooms/' + currentRoomId).update({ syncTime: formatted });
+                    }
+                }, 500);
+            }
+        }
+
+        function stopTimerSync() {
+            clearInterval(timerInterval);
+            return timerText.innerText;
+        }
+
+        function startGame(mode = 'local') {
+            gameMode = mode;
+            gameState = ["", "", "", "", "", "", "", "", ""];
+            currentPlayer = 'X';
+            board.className = "board waiting-players";
+            timerText.innerText = "00:00:00";
+            
+            cells.forEach(cell => { cell.innerText = ""; cell.className = "cell"; });
+
+            if(gameMode === 'local') {
+                playerXName = getNickname();
+                playerOName = "Local_O";
+                board.classList.remove('waiting-players');
+                isGameActive = true;
+                statusText.innerText = `Vez do jogador X`;
+                startTimerSync();
+            } else {
+                isGameActive = false;
+                statusText.innerText = `Aguardando oponente entrar...`;
+            }
+            showScreen(gameScreen);
+        }
+
+        function handleCellClick(e) {
+            const clickedCellIndex = parseInt(e.target.getAttribute('data-cell-index'));
+            
+            if (gameState[clickedCellIndex] !== "" || !isGameActive) return;
+            if (gameMode === 'online' && currentPlayer !== onlinePlayerSymbol) return; 
+
+            if (gameMode === 'local') {
+                gameState[clickedCellIndex] = currentPlayer;
+                e.target.innerText = currentPlayer;
+                e.target.classList.add(currentPlayer.toLowerCase());
+                checkResult();
+            } else if (gameMode === 'online' && currentRoomId) {
+                const updatedBoard = [...gameState];
+                updatedBoard[clickedCellIndex] = onlinePlayerSymbol;
+                
+                db.ref('rooms/' + currentRoomId).update({
+                    gameState: updatedBoard,
+                    currentPlayer: onlinePlayerSymbol === 'X' ? 'O' : 'X'
+                });
+            }
+        }
+
+        function checkResultOnline(remoteBoard, remotePlayer) {
+            let roundWon = false;
+            let winningLine = [];
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const condition = winningConditions[i];
+                if (remoteBoard[condition[0]] === '' || remoteBoard[condition[1]] === '' || remoteBoard[condition[2]] === '') continue;
+                if (remoteBoard[condition[0]] === remoteBoard[condition[1]] && remoteBoard[condition[1]] === remoteBoard[condition[2]]) {
+                    roundWon = true;
+                    winningLine = condition;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                const lastPlayerWhoMoved = remotePlayer === 'X' ? 'O' : 'X';
+                const duration = stopTimerSync();
+                isGameActive = false;
+                board.className = "board game-over";
+                winningLine.forEach(index => cells[index].classList.add(`win-${lastPlayerWhoMoved.toLowerCase()}`));
+                statusText.innerHTML = `🎉 Vitória de ${lastPlayerWhoMoved}!`;
+                
+                if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
+
+                if (lastPlayerWhoMoved === onlinePlayerSymbol) {
+                    scores[onlinePlayerSymbol]++;
+                    saveHistory(`Vitória ${onlinePlayerSymbol}`, duration, [...remoteBoard]);
+                    updateMenuDOM();
+                    vibrateDevice();
+                    triggerConfetti();
+                } else {
+                    saveHistory(`Derrota para ${lastPlayerWhoMoved}`, duration, [...remoteBoard]);
+                    updateMenuDOM();
+                }
+                return true;
+            }
+
+            if (!remoteBoard.includes("")) {
+                const duration = stopTimerSync();
+                isGameActive = false;
+                board.className = "board game-over";
+                statusText.innerText = "Empate! Deu velha! 👵";
+                
+                if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
+
+                scores.draws++;
+                saveHistory("Empate", duration, [...remoteBoard]);
+                updateMenuDOM();
+                return true;
+            }
+            return false;
+        }
+
+        function checkResult() {
+            let roundWon = false;
+            let winningLine = [];
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const condition = winningConditions[i];
+                if (gameState[condition[0]] === '' || gameState[condition[1]] === '' || gameState[condition[2]] === '') continue;
+                if (gameState[condition[0]] === gameState[condition[1]] && gameState[condition[1]] === gameState[condition[2]]) {
+                    roundWon = true;
+                    winningLine = condition;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                const duration = stopTimerSync();
+                isGameActive = false;
+                board.className = "board game-over";
+                winningLine.forEach(index => cells[index].classList.add(`win-${currentPlayer.toLowerCase()}`));
+                statusText.innerHTML = `🎉 Vitória de ${currentPlayer}!`;
+                
+                scores[currentPlayer]++;
+                saveHistory(`Vitória ${currentPlayer}`, duration, [...gameState]);
+                updateMenuDOM();
+                vibrateDevice();
+                triggerConfetti();
+                return;
+            }
+
+            if (!gameState.includes("")) {
+                const duration = stopTimerSync();
+                isGameActive = false;
+                board.className = "board game-over";
+                statusText.innerText = "Empate! Deu velha! 👵";
+                scores.draws++;
+                saveHistory("Empate", duration, [...gameState]);
+                updateMenuDOM();
+                return;
+            }
+
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            statusText.innerText = `Vez do jogador ${currentPlayer}`;
+        }
+
+        function saveHistory(result, time, finalBoardState) {
+            const mX = finalBoardState.filter(cell => cell === 'X').length;
+            const mO = finalBoardState.filter(cell => cell === 'O').length;
+            
+            historyData.unshift({
+                id: historyData.length + 1,
+                type: gameMode === 'local' ? 'Local' : 'Online',
+                playerX: playerXName,
+                playerO: playerOName,
+                result: result,
+                time: time,
+                board: finalBoardState,
+                movesX: mX,
+                movesO: mO
+            });
+
+            localStorage.setItem('velha_scores', JSON.stringify(scores));
+            localStorage.setItem('velha_history', JSON.stringify(historyData));
+        }
+
+        function updateMenuDOM() {
+            document.getElementById('scoreX').innerText = scores.X;
+            document.getElementById('scoreO').innerText = scores.O;
+            document.getElementById('scoreDraws').innerText = scores.draws;
+
+            const activeNick = getNickname();
+            const filteredHistory = historyData.filter(item => item.playerX === activeNick || item.playerO === activeNick);
+
+            if (filteredHistory.length === 0) {
+                noHistoryMsg.style.display = 'block';
+                const oldItems = historyList.querySelectorAll('.history-item');
+                oldItems.forEach(el => el.remove());
+            } else {
+                noHistoryMsg.style.display = 'none';
+                const items = historyList.querySelectorAll('.history-item');
+                items.forEach(el => el.remove());
+
+                filteredHistory.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'history-item';
+                    let winClass = 'draw-win';
+                    if (item.result.includes('X') || item.result.includes('Vitória X')) winClass = 'x-win';
+                    if (item.result.includes('O') || item.result.includes('Vitória O')) winClass = 'o-win';
+
+                    li.innerHTML = `
+                        <span class="col-partida">[${item.type}] #${item.id}</span>
+                        <span class="col-vencedor ${winClass}">${item.result}</span>
+                        <span class="col-tempo">${item.time}</span>
+                    `;
+                    li.addEventListener('click', () => {
+                        historyModal.classList.add('hidden');
+                        openDetailModal(item);
+                    });
+                    historyList.appendChild(li);
+                });
+            }
+        }
+
+        function openDetailModal(partida) {
+            document.getElementById('modalTitle').innerText = `[${partida.type}] Partida #${partida.id}`;
+            const winSpan = document.getElementById('modalWinner');
+            winSpan.innerText = partida.result;
+            winSpan.className = (partida.result.includes('X') || partida.result.includes('Vitória X')) ? 'col-vencedor x-win' : ((partida.result.includes('O') || partida.result.includes('Vitória O')) ? 'col-vencedor o-win' : 'col-vencedor draw-win');
+            document.getElementById('modalTime').innerText = partida.time;
+            document.getElementById('movesX').innerText = partida.movesX;
+            document.getElementById('movesO').innerText = partida.movesO;
+
+            const previewBoard = document.getElementById('previewBoard');
+            previewBoard.innerHTML = '';
+            partida.board.forEach(value => {
+                const cell = document.createElement('div');
+                cell.className = `preview-cell ${value.toLowerCase()}`;
+                cell.innerText = value;
+                previewBoard.appendChild(cell);
+            });
+            modalOverlay.classList.remove('hidden');
+        }
+
+        function setInterfaceLock(lock) {
+            createRoomBtn.disabled = lock;
+            createPasswordInput.disabled = lock;
+            allowMatchmakeCheck.disabled = lock;
+            openConnectModalBtn.disabled = lock;
+            startBtn.disabled = lock;
+            openSettingsBtn.disabled = lock;
+            if (lock) allowMatchmakeCheckLabel.classList.add('disabled');
+            else allowMatchmakeCheckLabel.classList.remove('disabled');
+        }
+
+        // ==========================================
+        // LÓGICA MULTIJOGADOR ONLINE BLINDADA
+        // ==========================================
+        function initOnlineRoom(roomId, symbol) {
+            currentRoomId = roomId;
+            onlinePlayerSymbol = symbol;
+            
+            db.ref('rooms/' + roomId + '/abandonedBy').onDisconnect().set(symbol);
+
+            roomListenerRef = db.ref('rooms/' + roomId);
+            roomListenerRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                playerXName = data.playerX || "Desconhecido";
+                playerOName = data.playerO || "Aguardando...";
+
+                // MONITORAMENTO DE ABANDONO RIGOROSO
+                if (data.abandonedBy) {
+                    const quitter = data.abandonedBy;
+                    if (isGameActive) {
+                        isGameActive = false;
+                        const duration = stopTimerSync();
+                        board.className = "board game-over";
+
+                        if (quitter !== onlinePlayerSymbol) {
+                            statusText.innerHTML = `🎉 Oponente abandonou! Vitória por <span style="color: ${onlinePlayerSymbol === 'X' ? '#ff4a5a' : '#00e6c3'}">Desistência</span>`;
+                            scores[onlinePlayerSymbol]++;
+                            saveHistory(`${onlinePlayerSymbol} (Desistência)`, duration, [...gameState]);
+                            updateMenuDOM();
+                            vibrateDevice();
+                            triggerConfetti();
+                        } else {
+                            statusText.innerText = "Você deixou a partida.";
+                        }
+                    }
+                    detachOnlineRoom();
+                    return;
+                }
+
+                // CONTADOR SINCRONIZADO RÍGIDO
+                if (onlinePlayerSymbol === 'O' && data.syncTime) {
+                    timerText.innerText = data.syncTime;
+                }
+
+                // CORREÇÃO CRÍTICA DO RECOMEÇO / INÍCIO DE SALA
+                if (data.playerO && (board.classList.contains('waiting-players') || data.recommenceTrigger === true)) {
+                    board.className = "board";
+                    isGameActive = true;
+                    if (onlinePlayerSymbol === 'X') {
+                        startTimerSync();
+                        db.ref('rooms/' + roomId).update({ recommenceTrigger: false });
+                    } else {
+                        clearInterval(timerInterval); 
+                    }
+                }
+
+                gameState = data.gameState || ["", "", "", "", "", "", "", "", ""];
+                currentPlayer = data.currentPlayer;
+
+                cells.forEach((cell, idx) => {
+                    cell.innerText = gameState[idx];
+                    cell.className = "cell";
+                    if(gameState[idx]) cell.classList.add(gameState[idx].toLowerCase());
+                });
+
+                if (data.playerO) {
+                    const isOver = checkResultOnline(gameState, currentPlayer);
+                    if(!isOver) {
+                        statusText.innerText = currentPlayer === onlinePlayerSymbol ? `Sua Vez [${onlinePlayerSymbol}]` : `Vez do Oponente...`;
+                    }
+                } else {
+                    statusText.innerText = `Sala: ${roomId} | Aguardando Oponente...`;
+                }
+            });
+        }
+
+        function detachOnlineRoom() {
+            if(currentRoomId) {
+                db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
+            }
+            if(roomListenerRef) roomListenerRef.off();
+        }
+
+        createRoomBtn.addEventListener('click', () => {
+            if(!savedNickname) {
+                settingsModal.classList.remove('hidden');
+                return alert("Por favor, configure e salve seu Nickname antes de jogar online!");
+            }
+
+            const password = createPasswordInput.value.trim();
+            const allowMatchmake = allowMatchmakeCheck.checked;
+            const roomId = savedNickname;
+
+            db.ref('rooms/' + roomId).set({
+                gameState: ["", "", "", "", "", "", "", "", ""],
+                currentPlayer: 'X',
+                password: password || null,
+                allowMatchmake: allowMatchmake,
+                playerX: savedNickname,
+                playerO: null,
+                abandonedBy: null,
+                syncTime: "00:00:00",
+                recommenceTrigger: false
+            }).then(() => {
+                let msg = `Sala criada!\nOponente deve buscar pelo seu nome: ${roomId}`;
+                if(password) msg += `\nSenha da sala: ${password}`;
+                alert(msg);
+                
+                initOnlineRoom(roomId, 'X');
+                startGame('online');
+            });
+        });
+
+        joinRoomBtn.addEventListener('click', () => {
+            const roomId = roomCodeInput.value.trim();
+            const password = roomPasswordInput.value.trim();
+
+            if(!roomId) return alert("Digite o nome do dono da sala.");
+
+            db.ref('rooms/' + roomId).once('value', (snapshot) => {
+                if (!snapshot.exists()) return alert("Sala não encontrada.");
+                
+                const data = snapshot.val();
+                if (data.playerO) return alert("Esta sala já está cheia. Entrada proibida!");
+                if (data.password && data.password !== password) return alert("Senha incorreta!");
+
+                db.ref('rooms/' + roomId).update({
+                    playerO: getNickname()
+                }).then(() => {
+                    connectModal.classList.add('hidden');
+                    initOnlineRoom(roomId, 'O');
+                    startGame('online');
+                });
+            });
+        });
+
+        // ==========================================
+        // MATCHMAKING REESTRUTURADO E BLINDADO
+        // ==========================================
+        matchmakeBtn.addEventListener('click', () => {
+            if(!savedNickname) {
+                settingsModal.classList.remove('hidden');
+                return alert("Configure seu Nickname antes de buscar partidas públicas!");
+            }
+
+            if (isSearching) {
+                cancelQueue();
+            } else {
+                isSearching = true;
+                matchmakeBtn.innerText = "Cancelar Busca";
+                matchmakeBtn.classList.add('searching');
+                setInterfaceLock(true);
+
+                // Primeiro tenta varrer se há alguma sala personalizada aberta aguardando Matchmake
+                db.ref('rooms').orderByChild('allowMatchmake').equalTo(true).once('value', (snapshot) => {
+                    if(!isSearching) return;
+
+                    let foundRoom = null;
+                    if (snapshot.exists()) {
+                        const rooms = snapshot.val();
+                        for (let id in rooms) {
+                            if (!rooms[id].playerO && !rooms[id].password && id !== savedNickname) {
+                                foundRoom = id;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (foundRoom) {
+                        db.ref('rooms/' + foundRoom).update({
+                            playerO: getNickname(),
+                            allowMatchmake: false
+                        }).then(() => {
+                            initOnlineRoom(foundRoom, 'O');
+                            startGame('online');
+                            resetMatchmakeBtn();
+                        });
+                    } else {
+                        // Se não há salas criadas esperando, executa a fila de pareamento clássica blindada
+                        executeClassicQueue();
+                    }
+                });
+            }
+        });
+
+        function executeClassicQueue() {
+            queueRef = db.ref('queue').push({
+                name: getNickname(),
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            queueRef.onDisconnect().remove();
+
+            matchmakeQueueListener = db.ref('queue').limitToFirst(2);
+            matchmakeQueueListener.on('value', (snapshot) => {
+                if (!isSearching) return;
+                const players = snapshot.val();
+                if (!players) return;
+
+                const keys = Object.keys(players);
+                if (keys.length >= 2) {
+                    // CORREÇÃO: O ID da sala passa a ser fixado pela chave única do Player 1 da fila!
+                    const targetRoomId = "MATCH_" + keys[0]; 
+                    
+                    if (keys[0] === queueRef.key) {
+                        // Eu sou o Player 1 (Criador oficial da sala em rede do Match)
+                        db.ref('rooms/' + targetRoomId).set({
+                            gameState: ["", "", "", "", "", "", "", "", ""],
+                            currentPlayer: 'X',
+                            playerX: players[keys[0]].name,
+                            playerO: players[keys[1]].name,
+                            allowMatchmake: false,
+                            abandonedBy: null,
+                            syncTime: "00:00:00",
+                            recommenceTrigger: false
+                        }).then(() => {
+                            // Limpa os registros e remove listeners para evitar colisões
+                            if(queueRef) queueRef.onDisconnect().cancel();
+                            db.ref('queue').child(keys[0]).remove();
+                            db.ref('queue').child(keys[1]).remove();
+                            if(matchmakeQueueListener) db.ref('queue').off();
+                            
+                            initOnlineRoom(targetRoomId, 'X');
+                            startGame('online');
+                            resetMatchmakeBtn();
+                        });
+                    } else if (keys[1] === queueRef.key) {
+                        // Eu sou o Player 2 (Entro na sala gerada pelo Player 1)
+                        setTimeout(() => {
+                            if(!isSearching) return;
+                            if(queueRef) queueRef.onDisconnect().cancel();
+                            if(matchmakeQueueListener) db.ref('queue').off();
+                            
+                            initOnlineRoom(targetRoomId, 'O');
+                            startGame('online');
+                            resetMatchmakeBtn();
+                        }, 1200); // Delay milimétrico estratégico para o Player 1 processar a criação no banco primeiro
+                    }
+                }
+            });
+        }
+
+        function cancelQueue() {
+            isSearching = false;
+            if (queueRef) {
+                queueRef.onDisconnect().cancel();
+                queueRef.remove();
+                queueRef = null;
+            }
+            db.ref('queue').off();
+            resetMatchmakeBtn();
+        }
+
+        function resetMatchmakeBtn() {
+            isSearching = false;
+            matchmakeBtn.innerText = "Buscar Partida";
+            matchmakeBtn.classList.remove('searching');
+            setInterfaceLock(false);
+        }
+
+        function vibrateDevice() { if ("vibrate" in navigator) navigator.vibrate([200, 100, 400]); }
+        function triggerConfetti() {
+            const colors = ['#ff4a5a', '#00e6c3', '#ffffff'];
+            for (let i = 0; i < 60; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                document.body.appendChild(confetti);
+                setTimeout(() => confetti.remove(), 3000);
+            }
+        }
+
+        function exitCurrentGame() {
+            stopTimerSync();
+            if (gameMode === 'online' && currentRoomId) {
+                const targetRoom = currentRoomId;
+                
+                db.ref('rooms/' + targetRoom).update({ abandonedBy: onlinePlayerSymbol });
+                detachOnlineRoom();
+                
+                setTimeout(() => {
+                    db.ref('rooms/' + targetRoom).remove(); // Deleta a sala inteiramente do banco
+                }, 400);
+            }
+            cancelQueue();
+            showScreen(menuScreen);
+        }
+
+        // ==========================================
+        // SISTEMA DE CONFIRMAÇÃO DE RECOMEÇO
+        // ==========================================
+        recommenceBtn.addEventListener('click', () => {
+            if(gameMode === 'online' && onlinePlayerSymbol !== 'X') {
+                return alert("Ação recusada: Apenas o criador da sala tem permissão para reiniciar o tabuleiro!");
+            }
+            confirmResetModal.classList.remove('hidden');
+        });
+
+        cancelResetBtn.addEventListener('click', () => confirmResetModal.classList.add('hidden'));
+
+        confirmResetBtn.addEventListener('click', () => {
+            confirmResetModal.classList.add('hidden');
+            if (gameMode === 'online' && currentRoomId) {
+                db.ref('rooms/' + currentRoomId).update({
+                    gameState: ["", "", "", "", "", "", "", "", ""],
+                    currentPlayer: 'X',
+                    syncTime: "00:00:00",
+                    recommenceTrigger: true
+                }).then(() => {
+                    startTimerSync();
+                });
+            } else {
+                stopTimerSync();
+                startGame('local');
+            }
+        });
+
+        // Listeners básicos de interface
+        openSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        saveSettingsBtn.addEventListener('click', () => {
+            const nick = nicknameInput.value.trim();
+            if(!nick) return alert("Digite um Nickname válido.");
+            savedNickname = nick;
+            localStorage.setItem('velha_nickname', savedNickname);
+            settingsModal.classList.add('hidden');
+            updateMenuDOM(); 
+            alert(`Perfil salvo! Seu nome é: ${savedNickname}`);
+        });
+
+        startBtn.addEventListener('click', () => startGame('local'));
+        menuBtn.addEventListener('click', exitCurrentGame);
+        closeModalBtn.addEventListener('click', () => {
+            modalOverlay.classList.add('hidden');
+            historyModal.classList.remove('hidden');
+        });
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+
+        updateMenuDOM();
+    </script>
+</body>
+</html>
