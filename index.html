@@ -91,7 +91,7 @@
             padding-bottom: 8px;
         }
 
-        /* Placar Geral */
+        /* Placar Geral Menu */
         .scoreboard {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -111,6 +111,23 @@
         .score-value { font-size: 1.5rem; font-weight: bold; }
         .score-value.x-val { color: #ff4a5a; }
         .score-value.o-val { color: #00e6c3; }
+
+        /* Placar Dinâmico na Tela de Jogo */
+        .live-match-scores {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            background: #202024;
+            border: 1px solid #29292e;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .live-player-x { color: #ff4a5a; font-weight: bold; }
+        .live-player-o { color: #00e6c3; font-weight: bold; }
+        .live-score-vs { color: #a8a8b3; font-family: monospace; font-weight: bold; }
 
         /* Controles Base e Online */
         .online-controls {
@@ -155,7 +172,7 @@
         .checkbox-group input { width: 16px; height: 16px; cursor: pointer; }
         .checkbox-group.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
-        /* Histórico Tablist */
+        /* Histórico Tablist SAMP */
         .samp-container {
             width: 100%;
             background: #121214;
@@ -208,7 +225,7 @@
             width: 100%;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .status {
@@ -411,6 +428,12 @@
     </div>
 
     <div class="screen hidden" id="gameScreen">
+        <div class="live-match-scores">
+            <span class="live-player-x" id="livePlayerXLabel">Jogador X: 0</span>
+            <span class="live-score-vs">VS</span>
+            <span class="live-player-o" id="livePlayerOLabel">Jogador O: 0</span>
+        </div>
+
         <div class="game-meta">
             <div class="status" id="status">Aguardando jogador...</div>
             <div class="timer" id="timer">00:00:00</div>
@@ -471,6 +494,20 @@
     </footer>
 
     <script>
+        // CONFIGURAÇÃO DO FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyDderD_PDYjEwZ0cYzMxjfczrwJe-vfbcA",
+            authDomain: "jogo-da-velha-multijogador.firebaseapp.com",
+            databaseURL: "https://jogo-da-velha-multijogador-default-rtdb.firebaseio.com",
+            projectId: "jogo-da-velha-multijogador",
+            storageBucket: "jogo-da-velha-multijogador.firebasestorage.app",
+            messagingSenderId: "570089554017",
+            appId: "1:570089554017:web:9440d97b2e658768996a20"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
         // Elementos DOM
         const menuScreen = document.getElementById('menuScreen');
         const gameScreen = document.getElementById('gameScreen');
@@ -491,6 +528,10 @@
         const historyList = document.getElementById('historyList');
         const noHistoryMsg = document.getElementById('noHistoryMsg');
         const nicknameInput = document.getElementById('nicknameInput');
+
+        // Elementos Dinâmicos do Placar em Partida
+        const livePlayerXLabel = document.getElementById('livePlayerXLabel');
+        const livePlayerOLabel = document.getElementById('livePlayerOLabel');
 
         // Controles
         const startBtn = document.getElementById('startBtn');
@@ -523,7 +564,6 @@
         let gameMode = 'local';
         let onlinePlayerSymbol = null;
         let currentRoomId = null;
-        let queueRef = null;
         let roomListenerRef = null;
         let isSearching = false;
         
@@ -534,8 +574,12 @@
         let startTime = 0;
         let timerInterval = null;
 
-        let playerXName = "Jogador Local X";
-        let playerOName = "Jogador Local O";
+        // Contadores internos de sessão Realtime
+        let onlineMatchScoreX = 0;
+        let onlineMatchScoreO = 0;
+
+        let playerXName = "Jogador X";
+        let playerOName = "Jogador O";
 
         const winningConditions = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
@@ -546,7 +590,6 @@
         });
 
         function getNickname() {
-            // CORREÇÃO: Impede falhas se o nickname local estiver limpo gerando um nome randômico automático
             if (!savedNickname) {
                 savedNickname = "Player_" + Math.floor(1000 + Math.random() * 9000);
                 localStorage.setItem('velha_nickname', savedNickname);
@@ -560,41 +603,6 @@
             gameScreen.classList.add('hidden');
             screen.classList.remove('hidden');
         }
-
-        settingsModal.addEventListener('click', (e) => {
-            if (!settingsModalContent.contains(e.target)) {
-                settingsModal.classList.add('hidden');
-                nicknameInput.value = savedNickname;
-            }
-        });
-
-        connectModal.addEventListener('click', (e) => {
-            if (!connectModalContent.contains(e.target)) {
-                connectModal.classList.add('hidden');
-            }
-        });
-
-        historyModal.addEventListener('click', (e) => {
-            if (!historyModalContent.contains(e.target)) {
-                historyModal.classList.add('hidden');
-            }
-        });
-
-        confirmResetModal.addEventListener('click', (e) => {
-            if (!confirmResetModalContent.contains(e.target)) {
-                confirmResetModal.classList.add('hidden');
-            }
-        });
-
-        openConnectModalBtn.addEventListener('click', () => {
-            roomCodeInput.value = "";
-            roomPasswordInput.value = "";
-            connectModal.classList.remove('hidden');
-        });
-        closeConnectModalBtn.addEventListener('click', () => connectModal.classList.add('hidden'));
-
-        openHistoryBtn.addEventListener('click', () => historyModal.classList.remove('hidden'));
-        closeHistoryModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
 
         function formatTime(ms) {
             let totalSeconds = Math.floor(ms / 1000);
@@ -626,6 +634,17 @@
             return timerText.innerText;
         }
 
+        function updateLiveScoreLabels() {
+            if (gameMode === 'local') {
+                livePlayerXLabel.innerText = `X: ${scores.X}`;
+                livePlayerOLabel.innerText = `O: ${scores.O}`;
+            } else {
+                // Modo Online exibe os nomes e as coroas correspondentes
+                livePlayerXLabel.innerText = `👑 ${playerXName}: ${onlineMatchScoreX}`;
+                livePlayerOLabel.innerText = `${playerOName}: ${onlineMatchScoreO}`;
+            }
+        }
+
         function startGame(mode = 'local') {
             gameMode = mode;
             gameState = ["", "", "", "", "", "", "", "", ""];
@@ -635,16 +654,27 @@
             
             cells.forEach(cell => { cell.innerText = ""; cell.className = "cell"; });
 
+            // REGRA PEDIDA: Remove o botão de recomeçar para o segundo jogador online
+            if (gameMode === 'online' && onlinePlayerSymbol === 'O') {
+                recommenceBtn.classList.add('hidden');
+            } else {
+                recommenceBtn.classList.remove('hidden');
+            }
+
             if(gameMode === 'local') {
                 playerXName = getNickname();
                 playerOName = "Local_O";
                 board.classList.remove('waiting-players');
                 isGameActive = true;
                 statusText.innerText = `Vez do jogador X`;
+                updateLiveScoreLabels();
                 startTimerSync();
             } else {
                 isGameActive = false;
                 statusText.innerText = `Aguardando oponente entrar...`;
+                onlineMatchScoreX = 0;
+                onlineMatchScoreO = 0;
+                updateLiveScoreLabels();
             }
             showScreen(gameScreen);
         }
@@ -695,6 +725,10 @@
                 
                 if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
 
+                if (lastPlayerWhoMoved === 'X') onlineMatchScoreX++;
+                else onlineMatchScoreO++;
+                updateLiveScoreLabels();
+
                 if (lastPlayerWhoMoved === onlinePlayerSymbol) {
                     scores[onlinePlayerSymbol]++;
                     saveHistory(`Vitória ${onlinePlayerSymbol}`, duration, [...remoteBoard]);
@@ -716,7 +750,6 @@
                 
                 if(currentRoomId) db.ref('rooms/' + currentRoomId + '/abandonedBy').onDisconnect().cancel();
 
-                scores.draws++;
                 saveHistory("Empate", duration, [...remoteBoard]);
                 updateMenuDOM();
                 return true;
@@ -748,6 +781,7 @@
                 scores[currentPlayer]++;
                 saveHistory(`Vitória ${currentPlayer}`, duration, [...gameState]);
                 updateMenuDOM();
+                updateLiveScoreLabels();
                 vibrateDevice();
                 triggerConfetti();
                 return;
@@ -758,7 +792,6 @@
                 isGameActive = false;
                 board.className = "board game-over";
                 statusText.innerText = "Empate! Deu velha! 👵";
-                scores.draws++;
                 saveHistory("Empate", duration, [...gameState]);
                 updateMenuDOM();
                 return;
@@ -857,6 +890,9 @@
             else allowMatchmakeCheckLabel.classList.remove('disabled');
         }
 
+        // ==========================================
+        // ARQUITETURA DE REDE REALTIME SINCRONIZADA
+        // ==========================================
         function initOnlineRoom(roomId, symbol) {
             currentRoomId = roomId;
             onlinePlayerSymbol = symbol;
@@ -870,6 +906,7 @@
 
                 playerXName = data.playerX || "Desconhecido";
                 playerOName = data.playerO || "Aguardando...";
+                updateLiveScoreLabels();
 
                 if (data.abandonedBy) {
                     const quitter = data.abandonedBy;
@@ -936,8 +973,7 @@
         }
 
         createRoomBtn.addEventListener('click', () => {
-            const activeNick = getNickname(); // Dispara o gerador se estiver nulo
-
+            const activeNick = getNickname();
             const password = createPasswordInput.value.trim();
             const allowMatchmake = allowMatchmakeCheck.checked;
             const roomId = activeNick;
@@ -986,10 +1022,10 @@
         });
 
         // ==========================================
-        // MATCHMAKING CORRIGIDO SEM RETORNO CORRUPTO
+        // MATCHMAKING RIGIDO FIXO POR NICKNAME (CORREÇÃO DE REDE)
         // ==========================================
         matchmakeBtn.addEventListener('click', () => {
-            const activeNick = getNickname(); // CORREÇÃO: Força a validação/geração e destrava o fluxo
+            const activeNick = getNickname(); 
 
             if (isSearching) {
                 cancelQueue();
@@ -1031,63 +1067,67 @@
 
         function executeClassicQueue() {
             db.ref('queue').off();
-
             const activeNick = getNickname();
 
-            queueRef = db.ref('queue').push({
+            // CORREÇÃO FINAL: Grava usando o Nickname como ID fixo direto no .set(), forçando a injeção sem rejeição
+            queueRef = db.ref('queue/' + activeNick);
+            queueRef.set({
                 name: activeNick,
                 timestamp: Date.now()
-            });
+            }).then(() => {
+                queueRef.onDisconnect().remove();
 
-            queueRef.onDisconnect().remove();
+                // Escuta as duas primeiras pessoas na fila pública
+                db.ref('queue').limitToFirst(2).on('value', (snapshot) => {
+                    if (!isSearching) return;
+                    const players = snapshot.val();
+                    if (!players) return;
 
-            db.ref('queue').limitToFirst(2).on('value', (snapshot) => {
-                if (!isSearching) return;
-                const players = snapshot.val();
-                if (!players) return;
-
-                const keys = Object.keys(players);
-                if (keys.length >= 2) {
-                    const targetRoomId = "MATCH_" + keys[0]; 
-                    
-                    if (keys[0] === queueRef.key) {
-                        db.ref('rooms/' + targetRoomId).set({
-                            gameState: ["", "", "", "", "", "", "", "", ""],
-                            currentPlayer: 'X',
-                            playerX: players[keys[0]].name,
-                            playerO: players[keys[1]].name,
-                            allowMatchmake: false,
-                            abandonedBy: null,
-                            syncTime: "00:00:00",
-                            recommenceTrigger: false
-                        }).then(() => {
-                            if(queueRef) queueRef.onDisconnect().cancel();
-                            db.ref('queue').off(); 
-                            db.ref('queue').child(keys[0]).remove();
-                            db.ref('queue').child(keys[1]).remove();
-                            
-                            initOnlineRoom(targetRoomId, 'X');
-                            startGame('online');
-                            resetMatchmakeBtn();
-                        });
-                    } else if (keys[1] === queueRef.key) {
-                        setTimeout(() => {
-                            if(!isSearching) return;
-                            if(queueRef) queueRef.onDisconnect().cancel();
-                            db.ref('queue').off(); 
-                            
-                            initOnlineRoom(targetRoomId, 'O');
-                            startGame('online');
-                            resetMatchmakeBtn();
-                        }, 1200); 
+                    const keys = Object.keys(players);
+                    if (keys.length >= 2) {
+                        const targetRoomId = "MATCH_" + keys[0]; 
+                        
+                        if (keys[0] === activeNick) {
+                            // Eu sou o Player 1 da Fila (Crio a sala)
+                            db.ref('rooms/' + targetRoomId).set({
+                                gameState: ["", "", "", "", "", "", "", "", ""],
+                                currentPlayer: 'X',
+                                playerX: players[keys[0]].name,
+                                playerO: players[keys[1]].name,
+                                allowMatchmake: false,
+                                abandonedBy: null,
+                                syncTime: "00:00:00",
+                                recommenceTrigger: false
+                            }).then(() => {
+                                if(queueRef) queueRef.onDisconnect().cancel();
+                                db.ref('queue').off(); 
+                                db.ref('queue').child(keys[0]).remove();
+                                db.ref('queue').child(keys[1]).remove();
+                                
+                                initOnlineRoom(targetRoomId, 'X');
+                                startGame('online');
+                                resetMatchmakeBtn();
+                            });
+                        } else if (keys[1] === activeNick) {
+                            // Eu sou o Player 2 da Fila (Entro na sala)
+                            setTimeout(() => {
+                                if(!isSearching) return;
+                                if(queueRef) queueRef.onDisconnect().cancel();
+                                db.ref('queue').off(); 
+                                
+                                initOnlineRoom(targetRoomId, 'O');
+                                startGame('online');
+                                resetMatchmakeBtn();
+                            }, 1200); 
+                        }
                     }
-                }
+                });
             });
         }
 
         function cancelQueue() {
             isSearching = false;
-            db.ref('queue').off();
+            db.ref('queue').off(); 
             if (queueRef) {
                 queueRef.onDisconnect().cancel();
                 queueRef.remove();
@@ -1131,7 +1171,7 @@
         }
 
         // ==========================================
-        // SISTEMA DE CONFIRMAÇÃO DE RECOMEÇO
+        // CONFIRMAÇÃO DE RECOMEÇO
         // ==========================================
         recommenceBtn.addEventListener('click', () => {
             if(gameMode === 'online' && onlinePlayerSymbol !== 'X') {
