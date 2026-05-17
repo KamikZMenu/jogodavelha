@@ -471,7 +471,7 @@
     </footer>
 
     <script>
-        // CONFIGURAÇÃO DO FIREBASE (SEU PROJETO ATIVO)
+        // CONFIGURAÇÃO DO FIREBASE (PROJETO ATIVO)
         const firebaseConfig = {
             apiKey: "AIzaSyDderD_PDYjEwZ0cYzMxjfczrwJe-vfbcA",
             authDomain: "jogo-da-velha-multijogador.firebaseapp.com",
@@ -540,7 +540,6 @@
         let queueRef = null;
         let roomListenerRef = null;
         let isSearching = false;
-        let matchmakeQueueListener = null; // Guardará o escutador ativo da fila
         
         let currentPlayer = 'X';
         let gameState = ["", "", "", "", "", "", "", "", ""];
@@ -866,9 +865,6 @@
             else allowMatchmakeCheckLabel.classList.remove('disabled');
         }
 
-        // ==========================================
-        // LÓGICA MULTIJOGADOR ONLINE BLINDADA
-        // ==========================================
         function initOnlineRoom(roomId, symbol) {
             currentRoomId = roomId;
             onlinePlayerSymbol = symbol;
@@ -883,7 +879,6 @@
                 playerXName = data.playerX || "Desconhecido";
                 playerOName = data.playerO || "Aguardando...";
 
-                // MONITORAMENTO DE ABANDONO RIGOROSO
                 if (data.abandonedBy) {
                     const quitter = data.abandonedBy;
                     if (isGameActive) {
@@ -906,12 +901,10 @@
                     return;
                 }
 
-                // CONTADOR SINCRONIZADO RÍGIDO
                 if (onlinePlayerSymbol === 'O' && data.syncTime) {
                     timerText.innerText = data.syncTime;
                 }
 
-                // CORREÇÃO CRÍTICA DO RECOMEÇO / INÍCIO DE SALA
                 if (data.playerO && (board.classList.contains('waiting-players') || data.recommenceTrigger === true)) {
                     board.className = "board";
                     isGameActive = true;
@@ -1004,7 +997,7 @@
         });
 
         // ==========================================
-        // MATCHMAKING REESTRUTURADO E BLINDADO
+        // MATCHMAKING BLINDADO CONTRA CONFLITOS DE TIMESTAMP
         // ==========================================
         matchmakeBtn.addEventListener('click', () => {
             if(!savedNickname) {
@@ -1020,7 +1013,7 @@
                 matchmakeBtn.classList.add('searching');
                 setInterfaceLock(true);
 
-                // Primeiro tenta varrer se há alguma sala personalizada aberta aguardando Matchmake
+                // Varre salas abertas criadas manualmente primeiro
                 db.ref('rooms').orderByChild('allowMatchmake').equalTo(true).once('value', (snapshot) => {
                     if(!isSearching) return;
 
@@ -1045,7 +1038,7 @@
                             resetMatchmakeBtn();
                         });
                     } else {
-                        // Se não há salas criadas esperando, executa a fila de pareamento clássica blindada
+                        // Executa pareamento com timestamp limpo nativo em string segura
                         executeClassicQueue();
                     }
                 });
@@ -1053,26 +1046,28 @@
         });
 
         function executeClassicQueue() {
+            // Desliga listeners soltos na tabela antes de abrir uma nova conexão
+            db.ref('queue').off();
+
             queueRef = db.ref('queue').push({
                 name: getNickname(),
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+                timestamp: Date.now() // Convertido para milissegundos estáticos, evitando conflito de ServerValue
             });
 
             queueRef.onDisconnect().remove();
 
-            matchmakeQueueListener = db.ref('queue').limitToFirst(2);
-            matchmakeQueueListener.on('value', (snapshot) => {
+            // Roda a escuta isolada por limitação rígida de 2 registros
+            db.ref('queue').limitToFirst(2).on('value', (snapshot) => {
                 if (!isSearching) return;
                 const players = snapshot.val();
                 if (!players) return;
 
                 const keys = Object.keys(players);
                 if (keys.length >= 2) {
-                    // CORREÇÃO: O ID da sala passa a ser fixado pela chave única do Player 1 da fila!
                     const targetRoomId = "MATCH_" + keys[0]; 
                     
                     if (keys[0] === queueRef.key) {
-                        // Eu sou o Player 1 (Criador oficial da sala em rede do Match)
+                        // Eu sou o Player 1 da Fila
                         db.ref('rooms/' + targetRoomId).set({
                             gameState: ["", "", "", "", "", "", "", "", ""],
                             currentPlayer: 'X',
@@ -1083,27 +1078,26 @@
                             syncTime: "00:00:00",
                             recommenceTrigger: false
                         }).then(() => {
-                            // Limpa os registros e remove listeners para evitar colisões
                             if(queueRef) queueRef.onDisconnect().cancel();
+                            db.ref('queue').off(); // Desliga a escuta global da fila imediatamente após o match
                             db.ref('queue').child(keys[0]).remove();
                             db.ref('queue').child(keys[1]).remove();
-                            if(matchmakeQueueListener) db.ref('queue').off();
                             
                             initOnlineRoom(targetRoomId, 'X');
                             startGame('online');
                             resetMatchmakeBtn();
                         });
                     } else if (keys[1] === queueRef.key) {
-                        // Eu sou o Player 2 (Entro na sala gerada pelo Player 1)
+                        // Eu sou o Player 2 da Fila
                         setTimeout(() => {
                             if(!isSearching) return;
                             if(queueRef) queueRef.onDisconnect().cancel();
-                            if(matchmakeQueueListener) db.ref('queue').off();
+                            db.ref('queue').off(); 
                             
                             initOnlineRoom(targetRoomId, 'O');
                             startGame('online');
                             resetMatchmakeBtn();
-                        }, 1200); // Delay milimétrico estratégico para o Player 1 processar a criação no banco primeiro
+                        }, 1200); 
                     }
                 }
             });
@@ -1111,12 +1105,12 @@
 
         function cancelQueue() {
             isSearching = false;
+            db.ref('queue').off(); // Força o desligamento de qualquer leitura travada
             if (queueRef) {
                 queueRef.onDisconnect().cancel();
                 queueRef.remove();
                 queueRef = null;
             }
-            db.ref('queue').off();
             resetMatchmakeBtn();
         }
 
@@ -1144,12 +1138,10 @@
             stopTimerSync();
             if (gameMode === 'online' && currentRoomId) {
                 const targetRoom = currentRoomId;
-                
                 db.ref('rooms/' + targetRoom).update({ abandonedBy: onlinePlayerSymbol });
                 detachOnlineRoom();
-                
                 setTimeout(() => {
-                    db.ref('rooms/' + targetRoom).remove(); // Deleta a sala inteiramente do banco
+                    db.ref('rooms/' + targetRoom).remove(); 
                 }, 400);
             }
             cancelQueue();
@@ -1157,7 +1149,7 @@
         }
 
         // ==========================================
-        // SISTEMA DE CONFIRMAÇÃO DE RECOMEÇO
+        // CONFIRMAÇÃO DE RECOMEÇO
         // ==========================================
         recommenceBtn.addEventListener('click', () => {
             if(gameMode === 'online' && onlinePlayerSymbol !== 'X') {
